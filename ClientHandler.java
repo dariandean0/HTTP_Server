@@ -6,14 +6,12 @@
  */
 
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.Socket;
-import java.util.Date;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 // handle client connections
 public class ClientHandler implements Runnable {
@@ -24,22 +22,53 @@ public class ClientHandler implements Runnable {
     }
 
     public void run() {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
-            String requestLine = reader.readLine();
-            System.out.println("Recieved request: " + requestLine);
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+             OutputStream outputStream = socket.getOutputStream()) {
 
-            //Date today = new Date();
-            //String httpResponse = "HTTP/1.1 200 OK\r\n\r\n" + today;
-            
+            // Read the request line (e.g., GET / HTTP/1.1)
+            String requestLine = reader.readLine();
+            System.out.println("Received request: " + requestLine);
+
+            // Parse the request to get the requested resource (file)
             String[] requestParts = requestLine.split(" ");
             String method = requestParts[0];
             String path = requestParts[1];
 
-            if (method.equals("GET")) {
-                handleGetRequest(path);
+            // Default content type is HTML
+            String contentType = "text/html";
+            String content = "";
+
+            // Determine the file path based on the request
+            String filePath = "C:\\Personal Projects\\HTTP_Server\\html" + (path.equals("/") ? "/index.html" : path);
+
+            // Check if the request is for a specific static file (CSS, JS)
+            if (path.endsWith(".css")) {
+                filePath = "C:\\Personal Projects\\HTTP_Server\\html" + path; // Serve CSS file
+                contentType = "text/css";
+            } else if (path.endsWith(".js")) {
+                filePath = "C:\\Personal Projects\\HTTP_Server\\html" + path; // Serve JS file
+                contentType = "application/javascript";
             }
-            
-            //socket.getOutputStream().write(httpResponse.getBytes("UTF-8"));
+
+            // Try reading the file content and serve the response
+            try {
+                byte[] fileContent = Files.readAllBytes(Paths.get(filePath));
+                content = new String(fileContent);
+
+                // Respond with a 200 OK status and the file content
+                String httpResponse = "HTTP/1.1 200 OK\r\n" +
+                                      "Content-Type: " + contentType + "; charset=utf-8\r\n" +
+                                      "Content-Length: " + fileContent.length + "\r\n" +
+                                      "\r\n" +
+                                      content;
+
+                outputStream.write(httpResponse.getBytes());
+            } catch (IOException e) {
+                // Handle case where file is not found (404)
+                String errorResponse = "HTTP/1.1 404 Not Found\r\n\r\n<h1>404 Not Found</h1>";
+                outputStream.write(errorResponse.getBytes());
+            }
+
         } catch (IOException e) {
             System.out.println("Error handling client: " + e.getMessage());
         } finally {
@@ -48,47 +77,6 @@ public class ClientHandler implements Runnable {
             } catch (IOException e) {
                 System.out.println("Error closing socket: " + e.getMessage());
             }
-        }
-    }
-
-    private void handleGetRequest(String path) throws IOException {
-        // Default to index.html if no specific file requested
-        if (path.equals("/")) {
-            path = "/index.html";
-        }
-
-        File file = new File("web" + path);
-        if (file.exists()) {
-            String contentType = "text/html";
-            if (path.endsWith(".css")) {
-                contentType = "text/css";
-            } else if (path.endsWith(".js")) {
-                contentType = "application/javascript";
-            }
-
-            byte[] content = readFile(file);
-            String httpResponse = "HTTP/1.1 200 OK\r\n" +
-                                  "Content-Type: " + contentType + "\r\n" +
-                                  "Content-Length: " + content.length + "\r\n" +
-                                  "\r\n";
-
-            socket.getOutputStream().write(httpResponse.getBytes("UTF-8"));
-            socket.getOutputStream().write(content);
-        } else {
-            String httpResponse = "HTTP/1.1 404 Not Found\r\n\r\n";
-            socket.getOutputStream().write(httpResponse.getBytes("UTF-8"));
-        }
-    }
-
-    private byte[] readFile(File file) throws IOException {
-        try (InputStream is = new FileInputStream(file);
-             ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
-            byte[] data = new byte[1024];
-            int nRead;
-            while ((nRead = is.read(data, 0, data.length)) != -1) {
-                buffer.write(data, 0, nRead);
-            }
-            return buffer.toByteArray();
         }
     }
 }
