@@ -12,12 +12,13 @@ import java.net.Socket;
 
 public class HTTP_Server {
     public static void main(String[] args) throws Exception {
-        try (ServerSocket server = new ServerSocket(8080)) {
-            System.out.println("Listening for connection on port 8080 ....");
+        try (ServerSocket server = new ServerSocket(8080, 50, null)) {
+            System.out.println("Listening for connection on port 8080 (accessible to the network) ....");
 
             while(true) {
                 try {
                     Socket socket = server.accept();
+                    System.out.println("Accepted connection from " + socket.getInetAddress());
                     new Thread(new ClientHandler(socket)).start();
                 } catch (IOException e) {
                     System.out.println("Error accepting client: " + e.getMessage());
